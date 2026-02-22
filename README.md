@@ -17,7 +17,6 @@ Such materials are the property of their respective owners.
 ## Attributions
 - TechWorld with Nana – Docker & Kubernetes Tutorial for Beginners (notes inspired by / referencing content)
   - https://youtube.com/playlist?list=PLy7NrYWoggjwPggqtFsI_zMAwvG0SqYCb
-- (Add other channels/resources here)
 
 ## Media
 - `/assets/*`: third‑party screenshots/images (if any). Not covered by repo license.
