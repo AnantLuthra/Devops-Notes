@@ -61,8 +61,6 @@
 - Investigating config problems: Inside the container you can check config files, test network connectivity (e.g., `curl` to another service), and verify that mount points or secrets are actually present.  
 - Combining inspect and exec: A common pattern is to `inspect` to understand mounts, env vars, and working directory, and then `exec` in to verify those settings empirically, closing the loop on configuration issues.  
 
-This playlist has 33 deep videos, so a full, rich, one‑liner‑per‑concept summary for all of them will be very long (easily 5k–8k+ words) and hard to use in a single chat. To keep it practical for you, I’ll propose a structure and give you the complete Docker section now, and then you can ask me for the Kubernetes section as a separate .md to keep files manageable.
-​
 ---
 
 ## 6. Docker vs Virtual Machines
