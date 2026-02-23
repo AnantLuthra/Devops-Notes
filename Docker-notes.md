@@ -100,10 +100,51 @@
 
 - Multi‑service definition: `docker-compose.yml` describes all services (web, db, cache) plus their ports, volumes, environment, and dependencies in a single versioned file.  
 - Automatic network creation: Compose creates a network for the project so services can talk to each other using service names as DNS, avoiding hard‑coded IPs.  
+- Docker network concept (important): When you run multiple services in the same `docker-compose.yml`, Docker Compose automatically creates and manages a single network for that project, and connects all services to it by default.
+- Container-to-container communication: From inside one container, you can reach another container by using the **service name** as the hostname (e.g., `mongodb`), because Compose provides internal DNS on that network.
+  - Example: From `my-app` container, connect to MongoDB using hostname `mongodb` (not `localhost`).
+
+```js
+// use when starting application as docker container
+let mongoUrlDocker = "mongodb://admin:password@mongodb";
+```
 - Service dependencies: The `depends_on` property expresses startup ordering (e.g., app depends on DB), making `docker-compose up` start services in a sensible sequence.  
 - Easy stack lifecycle: `docker-compose up -d` brings up the full stack in the background, and `docker-compose down` tears everything down (optionally keeping volumes for data).  
 - Scaling with Compose: You can scale a service (`docker-compose up --scale web=3`) to simulate multiple replicas behind the same service name, giving a feel for horizontal scaling.  
 - Environment isolation: Different compose files or overrides let you simulate dev vs test settings (different environment variables, ports, or resource limits) without changing core definitions.  
+- Simple example (app + MongoDB + mongo-express):
+
+```yml
+version: '3'
+services:
+  my-app:
+    image: 65458435491.sed.ecr.eu-north-1.amazonaws.com/my-app:1.2
+    ports:
+      - 3000:3000
+
+  mongodb:
+    image: mongo
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongo-data:/data/db
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8080:8081
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+
+volumes:
+  mongo-data:
+```
 
 ---
 
@@ -116,6 +157,27 @@
 - `CMD` vs `ENTRYPOINT`: `ENTRYPOINT` defines the main executable, while `CMD` supplies default arguments; understanding their interaction is key to creating flexible images.  
 - Multistage builds: Using an initial “builder” stage for compiling assets and a second “runtime” stage that only copies the compiled output yields small, production‑ready images without dev tools.  
 - `.dockerignore`: Listing paths like `node_modules`, `.git`, and build artifacts prevents them from being sent as build context, saving time and space.  
+- Simple example (Node.js app Dockerfile):
+
+```dockerfile
+FROM node:13-alpine
+
+ENV MONGO_DB_USERNAME=admin \
+    MONGO_DB_PWD=password
+
+RUN mkdir -p /home/app
+
+COPY ./app /home/app
+
+# set default dir so that next commands executes in /home/app dir
+WORKDIR /home/app
+
+# will execute npm install in /home/app because of WORKDIR
+RUN npm install
+
+# no need for /home/app/server.js because of WORKDIR
+CMD ["node", "server.js"]
+```
 
 ---
 
@@ -125,6 +187,7 @@
 - AWS ECR example: Amazon Elastic Container Registry is a managed registry where you push images using AWS credentials and pull them from AWS compute services like ECS or EKS.  
 - Authentication flow: CLI tools retrieve a short‑lived login token and pass it to `docker login`, after which `docker push` and `docker pull` work against the private endpoint.  
 - Image naming conventions: Private images include registry URL prefixes (e.g., `123456789012.dkr.ecr.region.amazonaws.com/my-app:tag`) so Docker knows where to fetch them from.  
+	- Example: `65458435491.sed.ecr.eu-north-1.amazonaws.com/my-app:1.2`
 - Integrating with CI/CD: Pipelines authenticate to the registry, build images, push them, and then deployment jobs pull those images into target clusters, enforcing a clear, auditable path from source to runtime.  
 
 ---
@@ -136,6 +199,7 @@
 - Mapping external ports: `ports` in the compose file expose services to the outside world (e.g., mapping app port 80 to host port 80 for user traffic).  
 - Environment variables and secrets: Compose lets you define environment variables per service and load them from `.env` files to keep configuration separate from images.  
 - Restart policies for resilience: `restart: always` or `on-failure` in compose ensures containers automatically come back if they crash or if the host reboots.  
+- Practical example: setting `restart: always` on `mongo-express` prevents it from failing when `mongodb` isn’t ready yet (it keeps retrying).  
 - Environment‑specific overrides: Extra compose files (e.g., `docker-compose.prod.yml`) tweak settings like resource limits or volume locations for production without changing base definitions.  
 
 ---
@@ -144,10 +208,23 @@
 
 - Container filesystem ephemerality: By default, data written inside a container’s filesystem disappears when the container is removed, which is unsafe for important data.  
 - Volume purpose: Volumes provide a separate, persistent storage area managed by Docker, allowing containers to be replaced while the data stays intact.  
-- Named vs anonymous volumes: Named volumes have explicit names you can reuse and manage, while anonymous volumes are automatically generated and harder to track.  
-- Bind mounts vs volumes: Bind mounts map exact host paths, granting more control, whereas named volumes abstract away the underlying location and are easier to move between hosts.  
+- 3 types of Docker volume mounts (with `docker run -v`):
+	- **Host volumes (bind mounts)**: You decide the exact location on the host where the data should live.
+		- Syntax: `docker run -v host_directory:container_directory`
+		- Example:
+			- `docker run -v /home/mount/data:/var/lib/mysql/data`
+	- **Anonymous volumes**: You pass only the container path; Docker automatically creates a (randomly named) volume on the host.
+		- Syntax: `docker run -v container_directory`
+		- Example:
+			- `docker run -v /var/lib/mysql/data`
+	- **Named volumes**: You give the volume a name and also pass the container path; Docker creates/manages the volume for you.
+		- Syntax: `docker run -v name:container_directory`
+		- Example:
+			- `docker run -v name:/var/lib/mysql/data`
+		- This is the most commonly used approach and generally the recommended way to manage persistent data.
+- Named volume in Compose looks like: `mongo-data:/data/db` (where `mongo-data` is created/managed by Docker).
 - Database use case: Tutorials commonly show a database container writing its data directory to a volume so that upgrades or redeploys of the DB container do not wipe the stored data.  
-
+![docker-volumes.png](./assets/docker-volumes.png)
 ---
 
 ## 14. Volumes in Practice
