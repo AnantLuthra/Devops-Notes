@@ -1,6 +1,9 @@
 # Kubernetes – Short Notes
 
-### Main components of Kubernetes:
+Index
+- 
+
+## Main components of Kubernetes:
 - Node - A machine on which pods run.
 - Pod - A group of one or more containers, with shared storage/network, and a specification for how to run the containers.
 - Control Plane - This is the collection of processes that manage the state of the cluster, including the API server, scheduler, and controller manager.
@@ -10,19 +13,19 @@
 - ConfigMap - A Kubernetes object that lets you store configuration for your applications separately from the application code.
 - Secret - A Kubernetes object that lets you store sensitive information, such as passwords, OAuth tokens, and SSH keys. (But it is not encrypted by default, so you should use additional measures to secure it.)
 
-### Different ways of deployment in Kubernetes:
+## Different ways of deployment in Kubernetes:
 - Deployment - In this we configure desired number of replicas we want to run in a cluster. Kubernetes will ensure that the desired number of pods are running at all times, and will automatically replace any failed pods.
 - StatefulSet - This deployment is for managing stateful applications, such as databases, that require stable network identities and persistent storage.
 - DaemonSet - This makes sure that exactly one copy of a pod is running on each node in the cluster. It is useful for running background tasks, such as log collection or monitoring agents.
 
 
-### 3 Services which must be present on worker node:
+## 3 Services which must be present on worker node:
 - Kubelet - This is an agent that runs on each node in the cluster and is responsible for managing the pods running on that node. It communicates with the Kubernetes API server to receive instructions and report back on the status of the pods.
 - Kube-proxy - This is a network proxy that runs on each node in the cluster and is responsible for routing traffic to the appropriate pods based on the service definitions. It also handles load balancing and service discovery. First request comes to `service` and then kube-proxy routes it to the appropriate pod.
 - Container runtime - This is the software that runs and manages the containers on each node. Kubernetes supports several container runtimes, including Docker(this also use containerd underneath), containerd, and CRI-O. The container runtime is responsible for starting and stopping containers, managing their lifecycle, and providing isolation between containers.
 
 
-### Processes running on Control Plane:
+## Processes running on Control Plane:
 
 1. API Server - This is the front-end for the Kubernetes control plane. It exposes the Kubernetes API and serves as the entry point for all administrative tasks. The API server validates and processes requests from users, controllers, and other components, and updates the cluster state accordingly.
 2. Scheduler - This is responsible for assigning pods to nodes in the cluster based on resource availability, constraints, and policies. The scheduler watches for new pods that need to be scheduled and selects the best node for each pod based on factors such as CPU and memory usage, node affinity, and taints/tolerations. (This only decides which node to assign the pod to, in real kublet does all the work of creating the pod on that node.)
@@ -30,14 +33,14 @@
 4. etcd - This is a key-value store that is used by the Kubernetes control plane to store all the cluster data. It is a critical component of the control plane and must be highly available and reliable.
 
 
-### Minikube & kubectl - local kubernetes setup:
+## Minikube & kubectl - local kubernetes setup:
 
 - Minikube - It is a one node cluster in which Control Plane and Worker Node processes run on the same machine. It is used for local development and testing of Kubernetes applications. It is docker container runtime preinstalled.
 
 - Kubectl - It is a command line tool that allows you to interact with the Kubernetes cluster (As we know that there are 3 ways in which we can intract with API Server of Control Plane, i.e. - CLI, UI, API. So kubectl is the CLI way of interacting with API Server). It allows you to deploy and manage applications, inspect cluster resources, and view logs. It communicates with the API server using RESTful APIs and supports a wide range of commands for managing Kubernetes resources. This works for cloud or hybrid clusters as well.
 
 
-### Kubectl commands:
+## Kubectl commands:
 
 The Flow: We manage Deployements -> which creates replica sets -> which creates pods -> pods manages containers. So everything is abstract we only need to manage deployments and kubernetes will take care of the rest. So we can use below commands to manage deployments and pods.
 
@@ -51,13 +54,13 @@ The Flow: We manage Deployements -> which creates replica sets -> which creates 
 - `kubectl get replicasets` - This command lists all the ReplicaSets in the current namespace. It shows the name, desired replicas, current replicas, and other details of each ReplicaSet.
 
 
-### Deployment and Service YAML file:
+## Deployment and Service YAML file:
 
 It has 3 parts - Metadata, Spec, and Status. We only need to define Metadata and Spec in our YAML file. Status is automatically generated by etcd store in Kubernetes. And yaml is very strict about indentation.
 
 Below is yaml file for deployment of nginx pod with 2 replicas and service to route the request to the pod.
 
-#### Deployment YAML file:
+### Deployment YAML file:
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -82,7 +85,7 @@ spec:
             - containerPort: 8080
 ```
 
-##### Service YAML file:
+#### Service YAML file:
 ```yaml
 apiVersion: v1
 kind: Service
@@ -106,7 +109,7 @@ spec:
 - `kubectl delete -f nginx-deployment.yaml` - This command deletes the deployment and all the pods created by it.
 - `kubectl delete -f nginx-service.yaml` - This command deletes the service and all the pods created by it.
 
-#### Yaml file got from etcd store of Kubernetes for the above deployment and service is as below:
+### Yaml file got from etcd store of Kubernetes for the above deployment and service is as below:
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -177,13 +180,13 @@ status:
   updatedReplicas: 2
 ```
 
-### Namespaces:
+## Namespaces:
 
 There are two namespaces:
 1. **Namespace in Linux** - It is a feature of the Linux kernel that allows you to create isolated environments for processes. Each namespace has its own set of resources, such as process IDs, network interfaces, and file systems. This allows you to run multiple instances of the same application on the same machine without them interfering with each other. Example - A docker container gets its own namespace for process IDs, network interfaces, and file systems, so that it can run independently of other containers on the same machine.
    - Why it is needed - It is needed to provide isolation between different applications running on the same machine. Without namespaces, all processes would share the same resources, which could lead to conflicts and security issues. By using namespaces, you can ensure that each application has its own isolated environment, which improves security and stability.
 2. **Namespace in Kubernetes** - It is a way to divide cluster resources between multiple users.
-### Why we use namespaces
+## Why we use namespaces
 
  1. **Hard to manage:** Everything in one default namespace will be messy and hard to manage. Instead of that we can one namespace for `database`, one for `monitoring`, `elastic stack`, `nginx-ingress` and so on. This will make it easier to manage and organize resources in the cluster.
  2. **Name Conflicts in teams:** Team A had a deployement with abc.yaml name, later Team B did kubectl apply -f abc.yaml which will cause a conflict.
@@ -192,7 +195,7 @@ There are two namespaces:
     2. Blue green deployment - We can use two namespaces for blue and green deployments. This will allow us to deploy new versions of our application without affecting the existing version. We can switch between the two versions by changing the service selector to point to the new version.
  4. **Resources Quotas:** We can set resource quotas for each namespace, which limits the amount of CPU, memory, and storage that can be used by the resources in that namespace. This helps to prevent one team from consuming all the resources in the cluster and ensures that resources are allocated fairly among different teams.
 
-### Characteristics of Namespaces in Kubernetes:
+## Characteristics of Namespaces in Kubernetes:
 - We cannot use most of the resources from another namespace. For example, we can't use a configmap(that is using db (which itself is in a different namespace)) of a namespace from another namespace.
 - But we can use database service from a configmap of a namespace from another namespace. For example, we can use a configmap of a namespace which is using database service of another namespace.
 - Components of Kubernetes that are not namespaced include nodes, persistent volumes, storage classes, and namespaces themselves. These resources are global to the cluster and are not associated with any particular namespace.
@@ -211,7 +214,7 @@ There are two namespaces:
   - Command to create a namespace - `kubectl create namespace <namespace-name>`. This will create a new namespace in the cluster. We can also use `kubectl get namespaces` to see all the namespaces in the cluster. 
   - Install `kubectx` which will give access to `kubens` command which will allow us to switch between namespaces easily. Example - `kubens <namespace-name>` will switch to the specified namespace.
 
-### Different types of Namespaces in Kubernetes:
+## Different types of Namespaces in Kubernetes:
 1. **Default Namespaces** - These are the namespaces that are created by default when you create a Kubernetes cluster. They include:
 - `default` - This is the default namespace for resources that are not assigned to any other namespace.
 - `kube-system` - This namespace is used for resources that are managed by the Kubernetes system, such as the API server, scheduler, and controller manager.
@@ -219,17 +222,17 @@ There are two namespaces:
 - `kube-node-lease` - This namespace is used for resources that are related to node leases, which are used to track the availability of nodes in the cluster.
 2. **User-defined namespaces** - These are the namespaces that you can create to organize your resources in a way that makes sense for your application. You can create as many user-defined namespaces as you need, and you can assign resources to them using labels and selectors.
 
-### IP addresses for nodes and pods
+## IP addresses for nodes and pods
 - Each node gets a range of IP addresses for eg. 
   - Node 1 - 10.1.1.x
   - Node 2 - 10.1.2.x
 - And each pod gets an IP from the range in which node it is running.
   - For example the pod running on node 1 can have `10.1.1.5` as ip address.
 
-### Services
+## Services
 
 
-#### ClusterIP Service:
+### ClusterIP Service:
 
 ```yaml
 apiVersion: v1
@@ -278,7 +281,7 @@ spec:
 
 Above 8081 is the port on which service is listening, and we've also mentioned the name of service accordingly.
 
-### Headless Service:
+## Headless Service:
 We use this type when we wanna access a specific pod directly - instead of service load balancing to any pod.
 For example in a stateful application - its database replicas would be different at a time - so lets say now we wanna create another replica, then we need to access the last updated replica directly, for that we create a headless service through which we'll do a `DNS lookup` to get the IP of the pod we wanna access directly. 
 
@@ -301,7 +304,7 @@ In above code - `clusterIP: None` will not assign an IP to the service, and it w
 
 There can also be a case where both clusterIP and headless services are used - one for load balancing and another for direct access to a specific pod. 
 
-### NodePort Service:
+## NodePort Service:
 - In this type of service - we open a static port on each worker node in our k8s cluster - and that port is accessable from internet. So when we call that port from internet - it will be routed to the service and then service will route it to the pod. 
 - This is insecure because we're exposing our application to the external traffic directly, and anyone can access it. So we use this type of service only for testing purposes.
 - Example of nodeport service yaml file is as below:
@@ -330,13 +333,14 @@ spec:
      - `NodeIP:nodePort`
 
 
-### LoadBalancer Service:
+
+## LoadBalancer Service:
 
 - This is same to NodePort service - its just that the port opened by Loadbalancer is only accessible from the cloud provider's load balancer. So we can use this type of service in production environment. Rest of the things are same as NodePort service.
 - And creating this LoadBalancer will automatically create a NodePort, ClusterIP as well.
 - In this we pass `type: LoadBalancer` in the yaml file to make it a loadbalancer service. Otherwise it will be a clusterIP service by default.
 
-### Ingress:
+## Ingress:
 We use ingress to make an appraction from `service` and have a domain name with SSL certificate. So when we call the domain name from internet instead of a ip with a port.
 
 - **Difference between external and internal service** - Is that we don't have a 3rd port opened in internal one.
@@ -371,7 +375,7 @@ Things to note about above code.
       - Flow incase of a proxy server - Request comes to opened ports of proxy server -> passed to ingress controller -> then it will smartly forward it to required service -> then service will forward it to the pod.
 
 
-### Configuring Ingress in Minikube:
+## Configuring Ingress in Minikube:
 - If we have setup in Minikube we can simple run `minikube addons enable ingress` to enable ingress controller in minikube. This will install Nginx ingress controller in the cluster. With this following things happen:
   - Automatically starts the K8s Nginx implementation of Ingress Controller
   - Minikube uses minikube tunnel to enable ingress access
@@ -518,3 +522,270 @@ data:
   tls.key: base64 encoded private key
 ```
 One thing to keep in mind is that the secret should be created in the same namespace as the ingress resource. Otherwise, the ingress controller will not be able to find the secret and will fail to configure SSL for the specified host.
+
+
+## Persistent Storage in Kubernetes:
+
+Our storage should be such which follows these requirements:
+1) Storage that doesn't depend on the pod lifecycle.
+2) Storage must be available on all nodes.
+3) Storage needs to survive even if cluster crashes.
+
+**Things about Persistent Storage in Kubernetes:**
+- Kubernetes doesn't manage the storage itself, it just provides an abstraction layer for storage. So we can use any storage solution that meets the above requirements.
+- We create a PersistentVolume with YAML file just like other resources in Kubernetes. 
+- We can store data in an actual hard drive attached to nodes or a nfs volume, or a cloud storage solution like AWS EBS, GCP Persistent Disk, Azure Disk, etc. So pods can use different storage solutions without changing the pod configuration.
+- Storage aren't namespaced resources, so we can use a PersistentVolume from any namespace. 
+
+
+### Local VS Remote Persistent Storage:
+
+Local persistent storage failes these 2 requirements:
+- Being tied to 1 specific node
+- Not surviving cluster crashes
+
+There we should almost everytime use remote storage.
+
+Example of NFS PersistentVolume yaml file is as below:
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-name
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: slow
+  mountOptions:
+    - hard
+    - nfsers=4.0
+  nfs:
+    path: /dir/path/on/nfs/server
+    server: nfs-server-ip-address
+```
+
+Example of Google Cloud Persistent Disk PersistentVolume yaml file is as below:
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: test-volume
+  labels:
+    topology.kubernetes.io/zone: us-central1-a__us-central1-b
+spec:
+  capacity:
+    storage: 400Gi
+  accessModes:
+    - ReadWriteOnce
+  gcePersistentDisk:
+    pdName: my-data-disk
+    fsType: ext4
+```
+
+- So Generally system administrators create the actual persistant storage and the whole cluster based on the needs of developers, these are SREs or devops engineers.
+- And second comes the developers & devops engineers who create PersistentVolumeClaim to use the storage in their pods. 
+- Developers write the YAML file for the PersistentVolumeClaim and the pod which will use it. And then they apply it to the cluster. The cluster will then bind the PersistentVolumeClaim to a PersistentVolume that matches the requirements of the claim. And then the pod will be able to use the storage.
+
+Example of PersistentVolumeClaim yaml file is as below:
+```yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-name
+spec:
+  storageClassName: manual
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+Example of how we would use this claim in our pod yaml file is as below:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+  - name: mycontainer
+    image: myimage
+    volumeMounts:
+    - mountPath: "/data"
+      name: mypvc
+  volumes:
+  - name: mypvc
+    persistentVolumeClaim:
+      claimName: pvc-name
+```
+
+**Important Note**: PVs aren't namespaced resources, so we can use a PersistentVolume from any namespace. But PVCs are namespaced resources, so we can only use a PersistentVolumeClaim from the same namespace as the pod.
+
+- **Level of Abstraction**: From Bottom to Top - PersistentVolume -> PersistentVolumeClaim -> Pod -> Container. So we can say that PersistentVolume is the actual storage, PersistentVolumeClaim is the request for storage, and Pod is the consumer of storage.
+- We can also mount a configmap or a secret as a volume in a pod. This allows us to store configuration data or sensitive information in a separate resource and mount it into the pod at runtime. This is useful for separating configuration from code and for managing secrets securely. Example below.
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: busybox-containers
+      image: busybox
+      volumeMounts:
+        - name: config-diir
+          mountPath: /etc/config
+  volumes:
+    - name: config-dir
+      configMap:
+        Name: bb-configmap
+```
+
+## Storage Classes in Kubernetes:
+- Storage class provisions Persistent Volumes dynamically, when PersistentVolumeClaim Claims it.
+
+Yaml for creating a storage class is as below:
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storage-class-name
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: io1
+  iopsPerGb: "10"
+  fsType: ext4
+```
+
+So when we create a PersistentVolumeClaim with the storage class name, it will automatically create a PersistentVolume with the specified parameters. And then the pod can use that PersistentVolumeClaim to access the storage.
+
+## Mounting ConfigMap and Secret as Volumes in Pods:
+
+Example of mounting a ConfigMap, Secret as a volume in a pod is as below:
+```yaml
+spec:
+        containers:
+          - name: mosquitto
+            image: eclipse-mosquitto:2.0
+            ports:
+              - containerPort: 1883
+            volumeMounts:
+              - name: mosquitto-config
+                mountPath: /mosquitto/config
+              - name: mosquitto-secret
+                mountPath: /mosquitto/secret
+                readOnly: true
+              
+        volumes:
+          - name: mosquitto-config
+            configMap: 
+              name: mosquitto-config-file
+          - name: mosquitto-secret
+            secret: 
+              secretName: mosquitto-secret-file
+```
+
+## Different Between StatefulSet and Deployment
+
+1. In deployment we have stateless applications - which application pods can be scaled up and down easily, and they don't have any persistent state. But in statefulset we have stateful applications - which application pods have a persistent state, and they need to be scaled up and down carefully.
+2. Even database pod in stateless application can't be scaled up easily because data needs to be consistent across the pods.
+3. Also in deployment the app can have request in random order through Service, but in a database pod where replicas are there - request has to go through specific pod because the data is not consistent across the pods. 
+4. Stateful applications aren't suitable for containerization, but stateless applications can easily be containerized.
+
+**What Statefullset provides:**
+1. Stable, unique network identifiers - Each pod in a StatefulSet has a sticky unique name(identifier) and a fixed individual DNS name, e.g., `mysql-0.svc2`, first is statefulsetname, then pod number, then service name. 
+2. In statefullset the name of pods are predictable and ordered, so we can use them to access the pods directly. For example - if we have a statefulset with 3 replicas, the pods will be named as `pod-0`, `pod-1`, and `pod-2` unlike deployment where the pods are named randomly.
+3. In statefull set pods are created in order, and they are terminated in reverse order. So if we have a statefulset with 3 replicas, the pods will be created in the order of `pod-0`, `pod-1`, and `pod-2`, and they will be terminated in the order of `pod-2`, `pod-1`, and `pod-0`. This is important for stateful applications because they need to be scaled up and down carefully to maintain data consistency.
+
+
+**What happens in database applications with statefullsets:**
+- As we have 1 main database, and others are replicas of that which are only used for read operations. So each replica has to maintain a sync with the main pod.
+- We use PersistentVolumeClaims to store the data of each pod in a StatefulSet. Each pod gets its own PersistentVolumeClaim, which contains the replicated data, and its own state. Through this mechanism, even if the pod dies, it can be rescheduled, and to make it work we should use remote persistent volume because a pod can be rescheduled on a different node, and the data should be available on that node as well. 
+
+## Managed Vs Unmanaged Kubernetes Cluster:
+
+1. Create own cluster from scratch - In this we have to create our own cluster from scratch, and we have to manage the cluster ourselves. We have to install and configure the Kubernetes components, and we have to manage the cluster ourselves. This is a good option if we want to have full control over the cluster, and we have the expertise to manage it. But it is a lot of work, and it is not recommended for production environments.
+2. Managed k8s cluster - In this we use a managed Kubernetes service from a cloud provider, such as AWS EKS, GCP GKE, Azure AKS, etc. The cloud provider manages the cluster for us, and we don't have to worry about the underlying infrastructure. This is a good option if we want to focus on our application development, and we don't want to worry about managing the cluster. But it is more expensive than creating our own cluster from scratch.
+
+**Managed Example. - Linode Kubernetes Engine (LKE)**
+- You only care about Worker Nodes
+- Everything pre-installed
+- Control Plane Nodes created and managed by Cloud Provider
+- you only pay for the Worker Nodes
+- Less effort and time
+
+**Example.**
+- Lets say we wanna run a mongodb pod in LKE, we will select number of worker nodes and their type cpu ram etc, and select region.
+- Now we need to make persistent storage as kubernetes doesn't provide us - so we'll need to..
+  - Create physical storage
+  - Create persistent volume
+  - Attach volumes to your database
+- But instead we can use Linode Block Storage in which linode creates:
+  - Persistent Volumes
+  - with physical storage
+- Once we have our Node app running, MongoDB pod running, storage configured, now we need services and ingress to make our application accessible from internet. For that we use Linode NodeBalancer.
+- Linode's LoadBalancer comes in front of our enginx ingress controller, so that becomes the entrypoint for our application. 
+
+**Things can be done with Linode's LoadBalancer:**
+- Scaling up and down the application easily.
+- Adding Session stickiness - in which if your application saves some data in a pod, so this stickiness will pass next request from that same user to that same pod only.
+- Adding SSL certificate to the LoadBalancer - Done with the help of `cert-manager` plugin, and store the ssl or tls certificate in a k8s secret.
+- We can also move our nodes closer to our users by changing the region of the nodes, and this will reduce the latency of our application.
+
+**Important Notes**
+- **Vender Lock-in** - If we someday decide to complete or part of our application to another cloud provider, we will have to do a lot of work to move our application and data to the new cloud provider.
+- We can automate tasks using Terraform, Ansible. - to save time and work more efficiently.
+
+## Helm
+- **What is helm?** - Helm is a package manager for Kubernetes. It allows you to define, install, and upgrade even the most complex Kubernetes applications.
+- **What are helm Charts?** - Helm charts are a collection of yaml files that are pushed by differnet people or Organizations to helm repositories - and those yaml files are for different tools and applications, just like we get docker images from docker hub. Example would be downloading helm charts for `nginx-ingress` controller, `cert-manager`, `prometheus`, `grafana`, etc. And we can use those charts to install those applications in our cluster.
+- We can do `help search <chart-name>` to search for a chart in the helm repository, and then we can do `helm install <release-name> <chart-name>` to install that chart in our cluster. And we can also do `helm upgrade <release-name> <chart-name>` to upgrade that chart to a new version.
+- **Templating Engine?** - If we've many microservices or any such case where we're writing many yaml files and most of there code is same, just verions or names are different, in that case we use help templating and put dynamic values which are replaced by placeholders.
+Example of that template yaml file:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.name }}
+spec:
+  containers:
+    - name: {{ .Values.container.name }}
+      image: {{ .Values.container.image }}
+      port: {{ .Values.container.port }}
+```
+
+Now the files from which these values are coming is - `values.yaml` file which is as below:
+```yaml
+name: my-app
+container:
+  name: my-app-container
+  image: my-app-image
+  port: 9001
+```
+
+- **Another use of Helm is to deploy the same applications across different environments** - with the help of help charts, so we will create our own application chart that will have all the yaml files. Then we can use that same chart to deploy our application in different environments - like dev, staging, production, etc. And we can use different values.yaml files for each environment to customize the deployment.
+
+Helm Chart Structure:
+```
+mychart/
+  Chart.yaml          # Information about your chart
+  values.yaml         # The default values for your templates
+  charts/             # Charts that this chart depends on
+  templates/          # The template files
+```
+
+- When we do `helm install <release-name> <chart-name>` - it will create a release of that chart in our cluster - it will take templates from templates folder and insert values from values.yaml.
+- Ways to override values provided in values.yaml file:
+  1. `--set` flag - We can use `--set` flag to override values provided in values.yaml file. Example - `helm install <release-name> <chart-name> --set name=my-app --set container.name=my-app-container --set container.image=my-app-image --set container.port=9001`
+  2. `-f` flag - We can use `-f` flag to provide a custom values.yaml file. Example - `helm install <release-name> <chart-name> -f custom-values.yaml`
+
+- **Release Management**
+  - `helm install <release-name> <chart-name>` - Install a new release of a chart
+  - `helm upgrade <release-name> <chart-name>` - Upgrade an existing release of a chart
+  - `helm rollback <release-name> <revision>` - Rollback to a previous release of a chart
