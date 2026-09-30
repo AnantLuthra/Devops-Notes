@@ -789,3 +789,285 @@ mychart/
   - `helm install <release-name> <chart-name>` - Install a new release of a chart
   - `helm upgrade <release-name> <chart-name>` - Upgrade an existing release of a chart
   - `helm rollback <release-name> <revision>` - Rollback to a previous release of a chart
+
+
+## Deploying Images in Kubernetes from private docker repository:
+
+### Step 1
+- Do docker login: Create config.json file for Secret - That will be created when you do `docker login` command. This file is created in `~/.docker/config.json` and it contains the authentication information for the private docker registry. We will use this file to create a secret in Kubernetes.
+
+- So we'll create a Secret using this config.json file, either through a yaml file - or through a command if you don't wanna mention the actual content of config.json file in the yaml file. Example of command is as below:
+```bash
+kubectl create secret generic my-registry-key --from-file=.dockerconfigjson=/path/to/config.json --type=kubernetes.io/dockerconfigjson
+```
+The way we can make this secret using YAML file is as below:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-registry-key
+data:
+  .dockerconfigjson: aoaiwejfi2983fjakjw9ofij2o #base 64 encoded content of config.json file
+type: kubernetes.io/dockerconfigjson
+```
+
+Or we can do docker login - and create secret both at the same time using this command below:
+```bash
+kubectl create secret docker-registry my-registry-key --docker-server=<your-registry-server> --docker-username=<your-name> --docker-password=<your-pword> --docker-email=<your-email>
+```
+Example command for above:
+```bash
+kubectl create secret docker-registry my-registry-key --docker-server=https://index.docker.io/v1/ --docker-username=myusername --docker-password=mypassword
+```
+
+### Step 2
+- Using that secret in our Deployment yaml file to pull the image from private docker registry. Example of that is as below:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app-two
+  labels:
+    app: my-app-two
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app-two
+  template:
+    metadata:
+      labels:
+        app: my-app-two
+    spec:
+      imagePullSecrets:
+      - name: my-registry-key-two
+      containers:
+      - name: my-app-two
+        image: IMAGE_NAME_HERE
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+```
+
+**Important Note:**
+- Secret in which we store the credentials and the deployment where we're accessing that secret should be in the same namespace. Otherwise, the deployment will not be able to access the secret.
+
+## Operators in Kubernetes:
+
+- Operators get into picture because incase of stateless applications it is easy for core k8s to manage self heal and do all those things, but incase of stateful applications we still get to need a human intervention to manage the stateful applications. 
+- So Operators are another self healing loop or logic which does the following:
+  - How to create the mysql cluster
+  - How to run it
+  - How to synchronize the data
+  - How to update
+- We can look for operators developed by community from `operatorhub` or `github` and use them.
+- If we wanna create our own operator - we can use `operator-sdk` which is a tool that helps us to create operators easily. It provides us with a framework to create operators in golang, ansible, or helm. And it also provides us with a set of libraries and tools to help us to create operators easily.
+
+## Kubernetes API Groups Reference Notes
+
+In Kubernetes, the API is organized into modular categories called **API Groups**. 
+Each resource belongs to an API group, which determines:
+1. The REST API path used by `kubectl` and the API server (`/api/v1` vs `/apis/<group>/<version>`).
+2. The `apiVersion` field at the top of your YAML manifests.
+3. The `apiGroups` list inside RBAC resources (`Role`, `ClusterRole`).
+
+---
+
+### 1. The Core Group (`""`)
+
+The Core group represents the earliest, fundamental building blocks of Kubernetes.
+
+- **RBAC Syntax:** Represented as an empty string `[""]`.
+- **API URL Path:** `/api/v1` (does not use `/apis/`).
+- **YAML `apiVersion`:** Simply `v1`.
+
+#### Common Resources:
+- `pods`, `pods/log`, `pods/exec`, `pods/status`
+- `services`, `endpoints`
+- `namespaces`
+- `configmaps`
+- `secrets`
+- `persistentvolumes` (pv), `persistentvolumeclaims` (pvc)
+- `serviceaccounts`
+- `nodes`
+
+---
+
+### 2. Named API Groups
+
+As Kubernetes evolved, new resource types were organized into specific named groups to keep the API modular.
+
+- **RBAC Syntax:** The group name as a string (e.g., `["apps"]`, `["networking.k8s.io"]`).
+- **API URL Path:** `/apis/<group-name>/<version>` (e.g., `/apis/apps/v1`).
+- **YAML `apiVersion`:** `<group-name>/<version>` (e.g., `apps/v1`).
+
+---
+
+### 3. Quick Reference Table
+
+| API Group (for RBAC) | YAML `apiVersion` | Common Resources | Purpose / Scope |
+|---|---|---|---|
+| `""` *(Core)* | `v1` | `pods`, `services`, `secrets`, `configmaps`, `namespaces`, `nodes`, `persistentvolumeclaims` | Foundational primitives of Kubernetes |
+| `"apps"` | `apps/v1` | `deployments`, `statefulsets`, `daemonsets`, `replicasets` | Application workload orchestration and scaling |
+| `"batch"` | `batch/v1` | `jobs`, `cronjobs` | Ephemeral, run-to-completion tasks and scheduled work |
+| `"networking.k8s.io"` | `networking.k8s.io/v1` | `ingresses`, `networkpolicies`, `ingressclasses` | External traffic routing and network security rules |
+| `"storage.k8s.io"` | `storage.k8s.io/v1` | `storageclasses`, `volumeattachments`, `csinodes` | Dynamic storage provisioning and driver integration |
+| `"rbac.authorization.k8s.io"` | `rbac.authorization.k8s.io/v1` | `roles`, `rolebindings`, `clusterroles`, `clusterrolebindings` | Identity access control and cluster permissions |
+| `"autoscaling"` | `autoscaling/v2` | `horizontalpodautoscalers` (hpa) | Automated workload autoscaling |
+| `"admissionregistration.k8s.io"` | `admissionregistration.k8s.io/v1` | `validatingwebhookconfigurations`, `mutatingwebhookconfigurations` | Custom policy interceptors and admission webhooks |
+| `"policy"` | `policy/v1` | `poddisruptionbudgets` (pdb) | High-availability constraints during voluntary disruptions |
+
+---
+
+### 4. How to Find API Groups via CLI
+
+You do not need to memorize every group. Inspect them directly from your cluster:
+
+#### List all supported resources, their shortnames, and API groups:
+```bash
+kubectl api-resources
+```
+
+
+## RBAC in Kubernetes:
+
+- RBAC stands for Role-Based Access Control. It is a way to control access to resources in Kubernetes based on the roles of users or service accounts. It allows us to define roles and assign them to users or service accounts, and then we can use those roles to control access to resources in Kubernetes.
+
+### Role and RoleBinding:
+- `role` is limited to a namespace.
+- We can use `rb`(role binding)to bind a `role` to a user.
+- If we wanna provide similar access to 10 users we can create a group and assign that `role` to that group.
+
+### Role Yaml example
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: app-manager
+rules:
+  # 1. Core group resources (empty string "")
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # 2. Named group: "apps"
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # 3. Named group: "networking.k8s.io"
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+```
+- First rules means - giving get, list, watch access to pods, services and configmaps in core group.
+- Second rules means - giving get, list, watch, create, update and patch access to deployments and statefulsets in apps group.
+- Third rules means - giving get, list access to ingresses in networking.k8s.io group.
+- In above one as we haven't mentioned the namespace - it will be created in the default namespace. And if we wanna create it in another namespace - we can mention that namespace in the metadata section.
+
+#### Below is Different example
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: my-app
+  name: developer
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "create", "list"]
+  resourceNames: ["myapp"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list"]
+  resourceNames: ["mydb"]
+```
+- In above we mentioned the exact `resourceNames` to make that specific rule for a specific resource. 
+- First Rules means - giving get, create and list access to pods named `myapp` in core group.
+- Second Rules means - giving list access to pods named `mydb` in core group.
+
+#### Role Buinding Yaml example
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jane-developer-binding
+subjects:
+- kind: User
+  name: jane
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+```
+- In above `subject` is the one who gets the access, in this case User named `jane`.
+- and `roleRef` is the role which is being assigned to the subject, in this case Role named `developer`.
+
+
+
+### ClusterRole and ClusterRoleBinding:
+- `clusterrole` is not limited to a namespace, it can be used to provide access to resources across the cluster.
+- We can use `crb`(cluster role binding) to bind a `clusterrole` to a user or a group.
+- We do bind `clusterrole` to a group of admin users with `clusterrolebinding` so that they can manage the cluster.
+
+Example of clusterRole yaml file is as below:
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-admin
+rules:
+- apiGroups: [""]
+  resources: ["nodes"] # Similarly we can do for 'namespaces' as it is a cluster wide resource.
+  verbs: ["get", "create", "list", "delete", "update"]
+```
+
+ClusterRoleBinding yaml file is as below:
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: read-secrets-global
+subjects:
+- kind: Group
+  name: cluster-admins
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+```
+
+### Interesting Note:
+- We can also create a `clusterrole` for namespaced resources - like `pods`, `services`, `configmaps`, etc.
+
+What it does (Depends on how you bind it)
+The behavior depends entirely on whether you bind it with a `RoleBinding` or a `ClusterRoleBinding`:
+
+1. Paired with a `RoleBinding` $\rightarrow$ Reusable Template (Scoped to 1 Namespace)
+- What happens: The user only gets access to pods inside the specific namespace where the `RoleBinding` lives.
+- Why do it: Instead of creating the exact same `Role` in 20 different namespaces, you define one `ClusterRole` once. Then, you place a lightweight `RoleBinding` in each namespace pointing to that single `ClusterRole`.
+
+2. Paired with a `ClusterRoleBinding` $\rightarrow$ Cluster-Wide Access Across All Namespaces
+- What happens: The user gets access to pods across every single namespace in the cluster, present and future (e.g., `default`, `kube-system`, `custom namespaces`).
+- Why do it: For monitoring tools, log collectors, or cluster auditors who need to read pods everywhere without maintaining bindings in individual namespaces.
+
+**So**
+- We apply the above yaml files using the same `kubectl apply -f <file-name>.yaml` command.
+- View them with `kubectl get roles`, `kubectl describe role developer`, `kubectl get rolebindings`, `kubectl describe rolebinding jane-developer-binding`, `kubectl get clusterroles`, `kubectl describe clusterrole cluster-admin`, `kubectl get clusterrolebindings`, `kubectl describe clusterrolebinding read-secrets-global` commands.
+- 
+
+### Users & Groups in Kubernetes:
+
+- Kubernetes doesn't have a built-in user management system, so k8s admins use external sources for example Static Token file, Certificates, 3rd Party services like LDAP etc. to manage users and groups in Kubernetes.
+- So `API Server` using the knowledge of external user management system - authenticates the users and groups, and then it uses RBAC to authorize the users and groups to access resources in Kubernetes. 
+  - We can pass the users data ie - `users.csv` to api server like this `--token-auth-file=users.csv` and then api server will use that file to authenticate the users. And we can also use `--authorization-mode=RBAC` to enable RBAC in api server.
+
+There are two types of users in Kubernetes:
+- **Human Users** - This consists - k8s admins, developers, authorised by `clusterrole` and `role`.
+- **Application Users** - This consists internal applications i.e. - Prometheus, Internal applications which needs data internally from another applications. And External application which needs access to the cluster ie - `Jenkins`, `Terraform` etc.
+
+- So for Application users we create a `sa`(service account) which is a special type of user that is used by applications to access resources in Kubernetes. And we can use `role` and `clusterrole` to authorize the service accounts to access resources in Kubernetes. 
+  - `sa` is created using - `kubectl create serviceaccount sa1`
