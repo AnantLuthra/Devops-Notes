@@ -1071,3 +1071,131 @@ There are two types of users in Kubernetes:
 
 - So for Application users we create a `sa`(service account) which is a special type of user that is used by applications to access resources in Kubernetes. And we can use `role` and `clusterrole` to authorize the service accounts to access resources in Kubernetes. 
   - `sa` is created using - `kubectl create serviceaccount sa1`
+
+
+## Kubernetes Best Practices:
+
+1. We should use a specific version for docker images mentioned in yaml configuration files.
+Reason - To ensure consistency and avoid unexpected behavior due to changes in the base image.
+2. Adding Liveness Probe for each container in the pod to check if the container is running and healthy.  It is done while the application is running.
+Reason - To ensure that the application is running and healthy, and to restart the container if it is not.
+Example of liveness probe is as below:
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  periodSeconds: 5
+```
+3. Readiness Probe for each container is needed - to check if the application inside the pod is started or not? It is done during the startup of the application.
+Reason - In liveness probe we check if the container is running and healthy, but in readiness probe we check if the application inside the container is started and ready to serve requests.
+Example of readiness probe is as below:
+```yaml
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  periodSeconds: 5
+```
+4. Resource Requests for each container - It is the amount of cpu and ram that the container asks for to run the application.
+Reason - Because we can't give all the resources to a single container, we need to ensure other containers in the pod or node have enough resources to run.
+Example of resource requests is as below:
+```yaml
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "250m"
+```
+5. Resource Limits - It is the maximum amount of cpu and ram that the container can use to run the application.
+Reason - To ensure that the container doesn't use more resources than it needs, and to prevent it from affecting other containers in the pod or node.
+Example of resource limits is as below:
+```yaml
+resources:
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+```
+6. Don't expose a NodePort - Exposing a NodePort can lead to security vulnerabilities and should be avoided unless absolutely necessary.
+7. More than 1 Replica for Deployment - To ensure high availability and fault tolerance, we should have more than 1 replica for each deployment.
+8. More than 1 worker Node in your cluster - To ensure high availability and fault tolerance, we should have more than 1 worker node in our cluster.
+9. Using labels and selectors for all resources - To ensure that we can easily identify and manage our resources, we should use labels and selectors for all resources.
+10. Using Namespaces - To ensure that we can easily manage our resources and avoid naming conflicts, we should use namespaces for all resources.
+
+### 3 Security Best Practices:
+1. **Ensuring that all the images are free of vulnerabilities** - We should use a vulnerability scanner to scan our images for vulnerabilities and fix them before deploying them to production.
+2. **No Root Access for containers** - We should ensure that our containers are running as non-root users, and we should use a security context to enforce this.
+3. **Updating our cluster to the latest k8s version** - We should ensure that our cluster is running the latest version of Kubernetes, and we should update our cluster regularly to ensure that we have the latest security patches and features.
+  - Update of k8s can be done node by node. That' why it is important to have more than 1 worker node and pod replicas in our cluster.
+
+
+## Creating Helm Charts:
+
+In case of created helm chart for microservices we can have the following 2 cases.
+1. We have very similar configurations for all the microservices.
+  - In thi case we can create a single helm chart for all the microservices.
+2. We have very different configurations for all the microservices.
+  - In this case we can create a separate helm chart for each microservice.
+
+Command to create a new helm chart is as below:
+```bash
+helm create <chart-name>
+```
+Then we'll get this structure of the chart:
+```
+<chart-name>/
+  Chart.yaml          # Information about your chart
+  values.yaml         # The default values for your templates
+  charts/             # Charts that this chart depends on
+  templates/          # The template files
+```
+
+- Then we've to simply make a `values.yaml` file for each microservice and then we can use that chart to deploy our microservices in different environments - like dev, staging, production, etc. And we can use different values.yaml files for each environment to customize the deployment.
+- Once we're ready with our templates inside `templates/` folder and `values.yaml` file, we can first check if everything is working fine by running the following command:
+```bash
+helm install <release-name> <chart-name> --dry-run --debug
+```
+or this command
+```bash
+helm template <release-name> <chart-name>
+```
+- Then install using this command:
+```bash
+helm install <release-name> <chart-name>
+```
+- And uninstall  using this command:
+```bash
+helm uninstall <release-name>
+```
+
+### Creating Helm File.
+
+- As running many microservices with this `helm install` command would be a lot of work, so we can create a helm file which will have all the microservices and their values.yaml files. And then we can use that helm file to deploy all the microservices in one go.
+
+Example of helmfile.yaml is as below:
+```yaml
+releases:
+  - name: microservice1
+    chart: ./microservice1
+    values:
+      - ./microservice1/values.yaml
+  - name: microservice2
+    chart: ./microservice2
+    values:
+      - ./microservice2/values.yaml
+      - volumeName: "xyz"
+```
+- We can also override the values in the values.yaml file by specifying them in the helmfile.yaml file. For example, in the above example, we are overriding the `volumeName` value for microservice2.
+
+- We can then use the following command to deploy all the microservices in one go:
+```bash
+helmfile apply
+```
+or
+```bash
+helmfile sync
+```
+and then below command to destroy all the microservices in one go:
+```bash
+helmfile destroy
+```
+
