@@ -1199,3 +1199,89 @@ and then below command to destroy all the microservices in one go:
 helmfile destroy
 ```
 
+## Different Types of Container Orchestration Tools:
+
+1. **Kubernetes** - It is an open-source container orchestration platform that automates the deployment, scaling, and management of containerized applications.
+2. **Docker Swarm** - It is a native clustering and scheduling tool for Docker containers. It allows us to create and manage a cluster of Docker nodes as a single virtual system.
+3. **AWS ECS** - It is a fully managed container orchestration service provided by AWS. It allows us to run and manage Docker containers on a cluster of EC2 instances or using AWS Fargate.
+4. **Mesos** - It is an open-source cluster manager that provides efficient resource isolation and sharing across distributed applications or frameworks.
+5. **Nomad** - It is an open-source workload orchestrator that can run and manage a variety of workloads, including containers, virtual machines, and batch jobs.
+
+But in most of the cases, we use Kubernetes as it is the most popular and widely used container orchestration tool.
+
+
+## AWS ECS
+- AWS ECS manages container lifecycle, i.e. it manages the deployment, scaling, rescheduling, and monitoring of containers. 
+- We get a ECS cluster which has control plane and worker nodes, and we can run our containers on those worker nodes.
+- We don't pay for ECS control plane.
+- Downside of using ECS is that we get into kinda vendor lock in.
+- It has 2 options with which we can run our containers - EC2 and Fargate.
+1. **EC2** - In this option, we have to manage the EC2 instances ourselves. We have to create the EC2 instances, and then we have to register them with ECS.
+   - **Pros** - 
+     - We have full control over the infrastructure ie, the EC2 instances.
+   - **Cons** -
+     - We have to manage the EC2 instances ourselves, and we have to ensure that they are running and healthy. 
+
+2. **Fargate** - This is a serverless way to launch containers. In this option, we don't have to manage the EC2 instances ourselves. AWS manages the EC2 instances for us, and also orchestration of containers. This is good for small and easy to manage applications, but it is more expensive than EC2 option.
+- **Pros** - 
+  - Fargate automatically first analysis how much resources does your container needs and then it will provision a server resources for that container.
+  - No need to provision and manage servers
+  - On demand
+  - Only the infrastructure resources needed to run your containers.
+  - Pay only for what you use
+  - Easily scales up & down without fixed resources defined beforehand.
+  - Pricing is based on how long and how much capacity your container uses, so you only pay for what you use.
+- **Cons** -
+  - We have less control over the EC2 instances, and we can only use the instance types that AWS provides.
+  - It is more expensive than EC2 option.
+
+## AWS EKS
+- This is managing Kubernetes cluster on AWS infrastructure.
+- Alternate to ECS
+
+Advantage of using AWS EKS:
+- If you application is already running on Kubernetes, then it is easy to migrate to AWS EKS.
+- ECS is specific to AWS - which makes it difficult to migrate to another cloud provider, but EKS is based on Kubernetes which is open source and can be run on any cloud provider or on-premises.
+- We have access to tools we get with k8s - i.e. Helm, Prometheus, Grafana, etc.
+- We have to pay for EKS control plane.
+
+**How does EKS works?**
+- EKS deploys and manages Kubernetes Control Plane Nodes
+- K8s Control Plane Services already installed on them.
+- High Availability - Control Plane Nodes & etcd store are replicated across Availability Zones.
+- Like we use to get `docker agent` and `ecs agent` setup in worker nodes in ECS, in EKS we get k8s processes i.e, `kubelet` and `kube-proxy` setup in worker nodes.
+### Worker Nodes setup in EKS: EC2 vs EC2 Nodegroup vs Fargate
+
+| Option | Management Level | Description |
+|---|---|---|
+| **EKS with EC2 Instances (Self-Managed)** | 🔴 Self-Managed | You need to manage the infrastructure for Worker Nodes, including EC2 instances, scaling, patching, and configuration. |
+| **EKS with Nodegroup (Semi-Managed)** | 🟡 Semi-Managed | EKS creates and deletes EC2 instances for you, but you are responsible for configuring and managing the node group. |
+| **EKS with Fargate (Fully-Managed)** | 🟢 Fully-Managed | AWS manages the underlying infrastructure for you. You only need to define the Kubernetes workloads; there are no EC2 Worker Nodes to manage. |
+
+- Also we can use both EC2 and Fargate together in the same EKS cluster. And the same we can do using AWS ECS as well, so its kinda similar architecture.
+
+```text
+                      AWS Container Services
+                      ══════════════════════
+
+Orchestration Tool:        EKS                      ECS
+                      ┌───────────┐            ┌───────────┐
+                      │    K8s    │            │    ECS    │
+                      └─────┬─────┘            └─────┬─────┘
+                            │                        │
+                   ┌────────┴────────┐      ┌────────┴────────┐
+                   ▼                 ▼      ▼                 ▼
+Hosting Type:     EC2             Fargate  EC2             Fargate
+```
+
+## Steps to create a EKS cluster:
+
+1. We provision an EKS cluster with control plane nodes which is completely managed, replicated and configured by AWS itself.
+2. Then we create a group of EC2 instances - so that we don't have to create ec2 instances individually. And we do create group of instances using `nodegroup`. 
+3. Then we can connect such nodegroup or multiple nodegroups to the EKS cluster. Or we can use Fargate as an alternative.
+4. Then we simplly connect through our local kubectl and start deploying our applications in the EKS cluster.
+
+## AWS ECR:
+
+- AWS ECR is a fully managed Docker container registry that makes it easy for developers to store, manage, and deploy Docker container images. It is integrated with AWS IAM for access control, and it is also integrated with AWS ECS and EKS for easy deployment of container images.
+- ECR provides features like image scanning, image lifecycle management, and integration with other AWS services.
