@@ -1285,3 +1285,194 @@ Hosting Type:     EC2             Fargate  EC2             Fargate
 
 - AWS ECR is a fully managed Docker container registry that makes it easy for developers to store, manage, and deploy Docker container images. It is integrated with AWS IAM for access control, and it is also integrated with AWS ECS and EKS for easy deployment of container images.
 - ECR provides features like image scanning, image lifecycle management, and integration with other AWS services.
+
+## EKS setup on AWS with roles & autoscaling:
+
+1. First we'll create a role with specific permissions for EKS to create and manage resources in our AWS account. Then we'll assign this role to AWS service named `EKS` so that EKS can use it to create and manage resources in our AWS account.
+2. Then we have to create a VPC in which our worker nodes will be running - and in that VPC we need to setup `Network ACLs` and `Security Groups` for EC2 specifically so that `EKS control plane nodes` which are present in another VPC can communicate with our worker nodes. Also we need to setup a mix of `public` and `private` subnets in our worker nodes VPC for different use cases, one example is below:
+   1. A LoadBalancer service is created in a node - so that will be in a private subnet. But the cloud provided load balancer has to be in public subnet so that it can be accessed from the internet. 
+2. Also through IAM role we give Kubernetes control plane permission to change our VPC configuration in which our worker nodes are running, so that it can configure things based on our requirements. For example if we create a `NodePort` service EKS has to open those specific ports in the security group of our worker nodes. 
+3. We need to create EKS cluster after adding that role to EKS service, and having `EKS Auto Mode` on or off depending on if you want to add `nodegroup` to cluster yourself or not.
+
+4. Attaching local `kubectl` to the EKS cluster using - `aws eks update-kubeconfig --name <cluster-name>` this is when you already have down aws login once with that same account in same region.
+5. Creating a role which we'll have these policies. - these policies allow ec2 service and processes running on it to talk do other AWS services on our behalf.
+   - **AmazonEC2ContainerRegistryReadOnly** - This policy allows the EC2 instances to pull images from ECR.
+   - **AmazonEKS_CNI_Policy** - This policy allows the EC2 instances to create and manage network interfaces in our VPC for pods to communicate with each other and with the internet.
+   - **AmazonEKSWorkerNodePolicy** - This policy allows the EC2 instances to register themselves with the EKS cluster and to communicate with the EKS control plane nodes.
+6. Then we'll create nodegroup with that role given - and setting all the configurations like instance type, number of instances, subnets, etc. And then we'll attach that nodegroup to our EKS cluster, also we'll set desired, minimum and maximum number of nodes in the nodegroup so that it can autoscale based on the load on our applications.
+7. Also while we wanna update number of nodes required in the nodegroup - first we'll update the desired and max nodes.
+   1. And when we do scaling through nodegrou - while initializing it installs those 3 required components for k8s setup ie - `kubelet`, `kube-proxy` and `container runtime` which is good.
+8. Now enabeling autoscalling requires us to first create another policy which will look like this:
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Action": [
+				"autoscaling:DescribeAutoScalingGroups",
+				"autoscaling:DescribeAutoScalingInstances",
+				"autoscaling:DescribeLaunchConfigurations",
+				"autoscaling:DescribeTags",
+				"autoscaling:SetDesiredCapacity",
+				"autoscaling:TerminateInstanceInAutoScalingGroup",
+				"ec2:DescribeLaunchTemplateVersions"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		}
+	]
+}
+```
+- And this we'll add this policy to that role which we attached to our nodegroup, so that it can get info related to `scalinggroup` there `instances` and also it can terminate the instances when required. And then we'll install `cluster-autoscaler` in our EKS cluster which will monitor the resource usage of our applications and will scale the number of nodes in the nodegroup based on the resource usage.
+- Then we'll install cluster autoscaler from kubernetes from this [link](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler-autodiscover.yaml) and also we've to make following changes in yaml file:
+  - Put `AWS_REGION=ap-south-1` directly in the deployment configuration so the autoscaler no longer had to guess or ask the server where it was located.
+  - Put this as well `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` in `annotations` section of the deployment configuration so that the autoscaler will not evict the pods running in the cluster.
+  - Put these 2 commands and your cluster name along with correct kubernetes verion that your EKS cluster is running on.
+```yaml
+    - --balance-similar-node-groups
+    - --skip-nodes-with-system-pods=false
+    - --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/<cluster-name>
+    image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.36.1
+```
+- Also we need to make sure that `httpPutResponseHopLimit` is set to 2 because of the following reason - On AWS EKS, EC2 IMDSv2 default HttpPutResponseHopLimit is set to 1. Other wise this will happen, which happened with me:
+  - Kubernetes pods run inside a virtual network overlay on top of the worker node.
+  - AWS EC2 instances protect metadata using IMDSv2 with a default network "hop limit" of 1.
+  - When the autoscaler pod tried to reach the metadata IP (169.254.169.254) to fetch IAM role credentials, the packet required an extra network hop (from container to node to IMDS). Because the limit was 1, the request was dropped, causing it to time out with: `no EC2 IMDS role found ... context deadline exceeded`
+  - And when I changed the EC2 instance metadata `http-put-response-hop-limit` from 1 to 2 across the worker nodes. This permitted network packets originating inside the container to reach the EC2 metadata service and access the attached `eks-workernodes-role` credentials.
+  
+## Using Fargate with EKS:
+
+- **Serverless** - No EC2 instance in our AWS account.
+- It run 1 pod per Virtual Machine.
+- Supports stateful applications only with EFS integration.
+
+Steps to setup Fargate with EKS:
+1. First you've to create a role with specific permissions for EKS to create and manage resources in our AWS account. Then we'll assign this role to AWS service named `EKS` so that EKS can use it to create and manage resources in our AWS account.
+2. Select create fargate profile under compute section in EKS cluster.
+3. Select role and name for fargate profile.
+4. Select the namespace and pod selectors for which we want to run our pods on fargate. For example, if we select `dev` namespace and `profile=fargate` selector, then all the pods with `profile=fargate` label in `dev` namespace will run on fargate. Usecases of adding these labels and namespaces are:
+   - We can put specific namespace or labels of pod for development - and run them into fargate, and rest of pods will got into ec2 nodegroup for production.
+   - If we use both fargate and ec2 nodegroup in same cluster - then we can use fargate for stateless applications and ec2 nodegroup for stateful applications.
+5. After this we just need to create a deployment with the same namespace and label as we selected in fargate profile - and then our pods will run on fargate.
+
+## Using `eksctl` to create EKS cluster:
+
+- With this tool we can create EKS cluster with just 1 command, and it will create all the required resources for us - like VPC, subnets, security groups, IAM roles, etc. And it will also create a nodegroup for us with the specified number of nodes and instance type.
+- Execute just one command
+- Necessary components get created and configured in the background
+- Cluster will be created with default parameters
+- With more CLI options you can customize your cluster
+
+We can create a cluster using `eksctl` with the following command:
+```bash
+eksctl create cluster --name <cluster-name> --region <region> --nodegroup-name <nodegroup-name> --node-type <instance-type> --nodes <number-of-nodes> --nodes-min <minimum-nodes> --nodes-max <maximum-nodes> --managed
+```
+
+We can also use proper yaml files for having history and managing a eks cluster even after creating it.
+```yaml
+# cluster.yaml
+# A cluster with two managed nodegroups
+---
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: managed-cluster
+  region: us-west-2
+
+managedNodeGroups:
+  - name: managed-ng-1
+    minSize: 2
+    maxSize: 4
+    desiredCapacity: 3
+    volumeSize: 20
+    ssh:
+      allow: true
+      publicKeyPath: ~/.ssh/ec2_id_rsa.pub
+      # new feature for restricting SSH access to certain AWS security group IDs
+      sourceSecurityGroupIds: ["sg-00241fbb12c607007"]
+    labels: {role: worker}
+    tags:
+      nodegroup-role: worker
+    iam:
+      withAddonPolicies:
+        externalDNS: true
+        certManager: true
+
+  - name: managed-ng-2
+    instanceType: t2.large
+    minSize: 2
+    maxSize: 3
+```
+
+## Deploying to EKS cluster from Jenkins Pipeline
+
+1. **Jenkins Setup** we need to spin digital ocean and run jenkins as a docker container in it.
+2.  **Installing `kubectl`** Then install `kubectl` in it using below command:
+```bash
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && chmod +x kubectl && mv kubectl /usr/local/bin/
+```
+3. **Installing `aws-iam-authenticator`** in it using below command:
+```bash
+LATEST_TAG=$(curl -s https://api.github.com/repos/kubernetes-sigs/aws-iam-authenticator/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+VERSION=${LATEST_TAG#v}
+
+curl -Lo aws-iam-authenticator "https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/${LATEST_TAG}/aws-iam-authenticator_${VERSION}_linux_amd64" && chmod +x aws-iam-authenticator && mv aws-iam-authenticator /usr/local/bin/
+```
+4. **Creating `config` file** in jenkins container using below command:
+```bash
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: /etc/kubernetes/pki/ca.crt
+    server: <endpoint-url>
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: aws
+  name: aws
+current-context: aws
+users:
+- name: aws
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: /usr/bin/aws-iam-authenticator
+      args:
+        - "token"
+        - "-i"
+        - "<cluster-name>"
+```
+  - In above we just need to replace `<endpoint-url>` and `<cluster-name>` and certificate authority-data which you can get from the local `/home/user/.kube/config` file after running `aws eks update-kubeconfig --name <cluster-name>` command in your local machine.
+  - Then we need to simply put this config file in jenkins container in home directory of jenkins user in `.kube` folder. And then we can use `kubectl` commands in our jenkins pipeline to deploy our applications to EKS cluster.
+5. **Creating IAM user for Jenkins** - We need to create an IAM user in AWS with programmatic access and attach the following policies to it:
+   - `AmazonEKSClusterPolicy`
+   - `AmazonEKSWorkerNodePolicy`
+   - `AmazonEC2ContainerRegistryReadOnly`
+   - `AmazonEKS_CNI_Policy`
+   - `AmazonEKSServicePolicy`
+   - Then we need to get the access key and secret key of this IAM user and put it in jenkins credentials so that we can use it in our jenkins pipeline to authenticate with AWS and deploy our applications to EKS cluster.
+   - This is the best practice to create a separate IAM user for Jenkins with only the required permissions to deploy applications to EKS cluster, instead of using your personal IAM user or root account.
+6. **Saving Credentials in Jenkins** - Then we need to save the access key and secret key of the IAM user in multibranch pipeline jenkins credentials so that we can use it in our jenkins pipeline to authenticate with AWS and deploy our applications to EKS cluster.
+7. Then we can use the following step in `jenkinsfile` to create a pod in our EKS cluster.
+```groovy
+stage("deploy") {
+      environment {
+          AWS_ACCESS_KEY_ID = credentials('jenkins-aws_access_key_id')
+          AWS_SECRET_ACCESS_KEY = credentials('jenkins-aws_secret_access_key')
+      }
+      steps {
+          script {
+              echo "deploying"
+              sh 'kubectl create deployment nginx-deployment --image=nginx'
+          }
+      }
+  }
+```
+  - The above flow of using all the credentials and config would be this.
+    - First when the above code `kubectl` command will execute which will use the `config` file to connect to the EKS cluster.
+    - Then as we have mentioned in `config` file `command: /usr/bin/aws-iam-authenticator` this will use `aws-iam-authenticator` to authenticate with AWS.
+    - Once `aws-iam-authenticator` will be triggered it will use these 2 environment variables which we've set in this `deploy` stage of our `jenkinsfile` to authenticate with AWS.
