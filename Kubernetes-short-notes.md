@@ -1476,3 +1476,21 @@ stage("deploy") {
     - First when the above code `kubectl` command will execute which will use the `config` file to connect to the EKS cluster.
     - Then as we have mentioned in `config` file `command: /usr/bin/aws-iam-authenticator` this will use `aws-iam-authenticator` to authenticate with AWS.
     - Once `aws-iam-authenticator` will be triggered it will use these 2 environment variables which we've set in this `deploy` stage of our `jenkinsfile` to authenticate with AWS.
+
+## Credentials Best practices for Jenkins:
+
+1. **EC2 Instance Credentials** - Instead of creating and saving the private key of `ec2-user` for ssh which has all the permissions, we should create a seperate linux user on that instance and save private key of that in Jenkins.
+2. **Kubeconfig Credentials** - Instead of saving that whole `<cluster-name>-kubeconfig.yaml` file from `lke` - which gives administrative access to the cluster, we should create a jenkins user in k8s ie - `sa`(service account) with specific permissions that jankins needs, and then we should save that `kubeconfig` file of that `sa` in Jenkins.
+3. Overall best practice is to create dedicated jenkins users on different services with minimum required permissions and then save their credentials in Jenkins instead of using the default admin users or root users which have all the permissions.
+
+## Deploying to EKS from Complete CI/CD Jenkins Pipeline:
+
+- After all the steps ie.
+  - Increment Version of application.
+  - Test & Package the application.
+  - Build Docker image.
+  - Pushing Docker image to DockerHub or ECR.
+- For using updated image name in kubernetes file of application we use `envsubst` command. This substitues environment variables used in kubernetes yaml file with there values. Below is example of using it:
+  - `sh 'envsubst < kubernetes/deployment.yaml | kubectl apply -f -'`
+  - Install this tool - `apt-get install gettext-base`.
+- Now to Pull image from private dockerhub repo we ned credentials that we'll store as a `secret` in k8s.
