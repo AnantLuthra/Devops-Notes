@@ -1,11 +1,11 @@
-# Docker – Deep Short Notes
+# Docker – Notes
 
-- **Playlist**: Docker and Kubernetes Tutorial for Beginners – TechWorld with Nana [Link](https://youtube.com/playlist?list=PLy7NrYWoggjwPggqtFsI_zMAwvG0SqYCb&si=lBQuMIQ0CFECW_K5)
-- Total Notes credits goes to TechWorld with Nana for the original content and explanations in the videos.
+### Third-party notice
+- Docker notes are inspired by TechWorld with Nana's tutorial: [YouTube playlist](https://youtube.com/playlist?list=PLy7NrYWoggjwPggqtFsI_zMAwvG0SqYCb).
+- Total Notes credits goes to TechWorld with Nana for the original content, snapshots, and explanations in the videos.
 
 ---
 ## 1. What Is Docker?
-
 - Containerization vs traditional deployment: Traditional deployments install runtimes, libraries, and app directly on each server, while containerization puts everything the app needs into a self‑contained unit that runs the same on any host.  
 - OS‑level virtualization: Docker uses Linux kernel features (namespaces, cgroups) to isolate processes so each container thinks it has its own filesystem, network, and resources without needing a separate OS.  
 - Image as a blueprint: A Docker image is a versioned, read‑only snapshot of an application stack (base OS layer, runtime, app code, configs) that you can instantiate multiple times as containers.  
