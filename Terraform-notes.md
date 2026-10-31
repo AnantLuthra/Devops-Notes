@@ -19,6 +19,11 @@
   - [Variables in Terraform](#variables-in-terraform)
     - [3 Ways to pass values of variables in terraform:](#3-ways-to-pass-values-of-variables-in-terraform)
     - [Usecases \& usage of variables in terraform:](#usecases--usage-of-variables-in-terraform)
+  - [Environment Variables in Terraform](#environment-variables-in-terraform)
+  - [Provisioners](#provisioners)
+  - [Modules](#modules)
+  - [Remote State Management](#remote-state-management)
+  - [Best Practices for Terraform](#best-practices-for-terraform)
 
 ## What is Terraform?
 - Terraform is an open-source infrastructure as code (IaC) tool that allows you to define and provision infrastructure using a high-level configuration language. It enables you to manage cloud services, virtual machines, networks, and other resources in a consistent and repeatable manner.
@@ -196,3 +201,124 @@ vpc_cidr_block = "10.0.0.0/16"
 - To make the configuration more flexible and reusable for different environments (e.g., dev, staging, production) by allowing you to define different values for the same variable in each environment.
 - Default `terraform.tfvars` file is automatically used by terraform, other than that we'll have to provide the file name using `-var-file` flag, like `terraform apply -var-file="dev.tfvars"`. 
 - This allows you to have multiple variable files for different environments and easily switch between them during deployment.
+
+## Environment Variables in Terraform
+- As we need to provide different credentials to terraform for using different providers. For example, when using the AWS provider, we need to provide aws access key and secret key to terraform, 
+
+1. **First Way**
+For AWS then we'll export the following environment variables in our terminal before running terraform commands:
+```bash
+export AWS_ACCESS_KEY_ID="your_access_key"
+export AWS_SECRET_ACCESS_KEY="your_secret_key"
+```
+
+2. **Second Way**
+- If we have aws cli installed, and we've done `aws configure` command, then we'll have our credentials stored in `~/.aws/credentials` file, and terraform will automatically pick up the credentials from there, so we don't need to export the environment variables manually.
+
+3. **Third Way**
+- We can also set any environment variable using `TF_VAR_<variable_name>` format, and terraform will automatically pick up the value of that variable. For example: 
+```bash
+export TF_VAR_vpc_cidr_block="10.0.0.0/16"
+```
+- Below is using this variable in our terraform configuration file:
+```hcl
+variable "vpc_cidr_block"{
+    description = "cidr block value for vpc."
+}
+```
+- After this we can normally use this variable in our terraform configuration file.
+
+> 💡 **Pro Tip:** Automate as much of your infrastructure and environment setup as possible using Terraform. It makes recreating the same environment quick and consistent, simplifies collaboration, and allows team members to spin up identical environments with minimal effort. Anything configured manually becomes harder to reproduce, maintain, and share with others.
+
+## Provisioners
+- Provisioners in Terraform are used to execute scripts or commands on the resources being created or modified. They allow you to perform additional configuration or setup tasks after the resource has been provisioned. Provisioners can be used to install software, configure settings, or run custom scripts on the provisioned resources.
+
+Example of a `provisioner` block:
+```hcl
+resource "aws_instance" "myapp-server"{
+    ami = data.aws_ami.latest-amazon-linux-image.id
+    instance_type = var.instance_type
+    # and other settings ...
+
+    # Setup of provisioner
+    connection {
+        type = "ssh"
+        host = self.public_ip
+        user = "ec2-user"
+        private_key = file(var.private_key_location)
+    }
+
+    # Copying our shell script to the ec2 instance.
+    provisioner "file" {
+        source = "entry-script.sh"
+        destination = "/home/ec2-user/entry-script.sh"
+    }
+
+    # this one executes the script remotely
+    provisioner "remote-exec" {
+        inline = ["/home/ec2-user/entry-script.sh"]
+    }
+
+    # this one does both copying and executing the script remotely
+    provisioner "remote-exec" {
+        script = "entry-script.sh"
+    }
+
+    # this one executes the command locally on the machine where terraform is running
+    provisioner "local-exec"{
+        command = "echo ${self.public_ip} > output.txt"
+    }
+
+    user_data_replace_on_change = true
+
+    tags = {
+        Name: "${var.env_prefix}-server"
+    }
+}
+```
+- Above are the 3 types of provisioners which terraform supports.
+- **Note:** Provisioners is not recommended to use because of the following reasons:
+    - **Breaks idempotency concept** - In which we can run the same script multiple times and it will have the same effect, but with provisioners it may not be the case.
+    - **TF doesn't know what you execute** - Provisioners are executed outside of Terraform's control, so it cannot track the changes made by the provisioner. This can lead to inconsistencies between the desired state defined in the configuration files and the actual state of the resources.
+    - **Breaks current-desired state comparison** - Provisioners can make changes to the resources that are not reflected in the state file, which can lead to discrepancies between the desired state and the actual state of the resources. This can make it difficult to manage and maintain the infrastructure over time.
+- So instead we should handover the task of configuration management to specialized tools like Ansible, Chef, Puppet etc. Because they can see into the machines and can manage the configuration of the resources in a more controlled and consistent manner. They can also handle dependencies, rollbacks, and other advanced features that are not available with provisioners.
+- Incase of `local-exec` we can use a provider named `local` that is maintained by hashicorp, because this provider can track the current and desired state of the resources and can manage the configuration of the resources in a more controlled and consistent manner.
+- Also for generally running any scripts on server we can use a seperate block in our `ci/cd` pipeline.
+
+
+## Modules
+- Modules are a way to organize and reuse Terraform code. Its just like writing a function in programming, it takes some input does the work and gives some output. It allows you to create reusable components that can be shared across different projects or teams. Modules can be used to encapsulate complex infrastructure patterns, making it easier to manage and maintain your Terraform code.
+- We put similar resources in a module, for example - ec2 instance, ssh key pair. And another module would be for vpc, subnets, route tables etc. And then we can use these modules in our main configuration file to create the desired infrastructure.
+
+Example of using a module in a configuration file:
+```hcl
+module "vpc" {
+  source = "./modules/vpc"
+  vpc_cidr_block = var.vpc_cidr_block
+}
+```
+
+## Remote State Management
+- Terraform state file is a local file, which is not a good practice to keep it in local machine, because if we lose the state file then terraform will not be able to manage the resources properly. So we should use remote state management to store the state file in a remote location, like S3 bucket, Azure blob storage, GCP cloud storage etc. This way we can share the state file with other team members and also have a backup of the state file.
+Example of using remote state management in a configuration file:
+```hcl
+terraform {
+  backend "s3" {
+    bucket = "my-terraform-state-bucket"
+    key    = "terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+```
+
+## Best Practices for Terraform
+- **Manipulate state only through TF commands** - Never manually edit the state file.
+- **Always set up a shared remote state** - Ensure that all team members have access to the same remote state.
+- **Use state locking** - Enable state locking to prevent concurrent modifications to the state file.
+- **Back up your state files** - Regularly back up your state files to prevent data loss in case of accidental deletion or corruption.
+- **Use 1 state per environment** - Keep separate state files for different environments (e.g., dev, staging, production) to avoid conflicts and ensure isolation.
+- **Host TF scripts in Git repository** - Store your Terraform configuration files in a version control system like Git to track changes and collaborate with team members.
+- **Continuous Integration for TF code** - Set up a CI/CD pipeline to automatically validate and test your Terraform code before applying changes to the infrastructure.
+- **Apply TF ONLY through CD pipeline** - 
+  - Avoid running `terraform apply` manually on local machines. Instead, use a CI/CD pipeline to apply changes to the infrastructure. This ensures that all changes are reviewed, tested, and approved before being applied.
+  - This also helps in maintaining consistency and avoiding human errors during the deployment process.
